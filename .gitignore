@@ -5,9 +5,9 @@ orbitdb/
 node_modules/
 
 # Don't track examples' dependencies (libs) in git
-examples/browser/browser-webpack-example/bundle.js
-examples/browser/browser-webpack-example/*.map
-examples/browser/lib
+examples/*/browser-webpack-example/bundle.js
+examples/*/browser-webpack-example/*.map
+examples/*/lib
 
 # Don't track builds in git
 # Distribution builds are available via npm

@@ -4,7 +4,6 @@ const creatures = [
   '🐊', '🕷', '🐠', '🐘',
   '🐼', '🐰', '🐶', '🐥'
 ]
-
 const outputHeaderElm = document.getElementById("output-header")
 const outputElm = document.getElementById("output")
 const statusElm = document.getElementById("status")
@@ -16,6 +15,11 @@ const createType = document.getElementById("type")
 const writerText = document.getElementById("writerText")
 const publicCheckbox = document.getElementById("public")
 const readonlyCheckbox = document.getElementById("readonly")
+const textbox = document.getElementById("textbox")
+const submitButton = document.getElementById("submit")
+const emailText = document.getElementById("email")
+const createAccountButton = document.getElementById("createAccount")
+const lookUpAccountButton = document.getElementById("lookupAccount")
 
 function handleError(e) {
   console.error(e.stack)
@@ -48,6 +52,7 @@ const main = (IPFS, ORBITDB) => {
   const ipfs = new Ipfs({
     repo: '/orbitdb/examples/browser/new/ipfs/0.27.3',
     start: true,
+    pass: "12345678909876543210",
     EXPERIMENTAL: {
       pubsub: true,
     },
@@ -69,7 +74,8 @@ const main = (IPFS, ORBITDB) => {
     openButton.disabled = false
     createButton.disabled = false
     statusElm.innerHTML = "IPFS Started"
-    orbitdb = new OrbitDB(ipfs)
+    console.log(ipfs._peerInfo.id._idB58String)
+    orbitdb = new OrbitDB(ipfs,false,{ peerId:"QmREdrKqBKsdFN8NkR9HCCRn6a9dGALfJ2oYmZw5XfYZN3"})
   })
 
   const load = async (db, statusText) => {
@@ -80,7 +86,6 @@ const main = (IPFS, ORBITDB) => {
     db.events.on('ready', () => queryAndRender(db))
     // When database gets replicated with a peer, display results
     db.events.on('replicated', () => {
-      update(db)
       queryAndRender(db)
     })
     // When we update the database, display result
@@ -101,7 +106,7 @@ const main = (IPFS, ORBITDB) => {
       // Set the status text
       setTimeout(() => {
         statusElm.innerHTML = 'Database is ready'
-      }, 1000)
+        submitButton.disabled = false}, 1000)
     })
 
     // Load locally persisted database
@@ -165,7 +170,7 @@ const main = (IPFS, ORBITDB) => {
 
       await load(db, 'Creating database...')
       // startWriter(db, interval)
-      update(db)
+      //update(db)
     } catch (e) {
       console.error(e)
     }
@@ -187,7 +192,7 @@ const main = (IPFS, ORBITDB) => {
       await load(db, 'Loading database...')
 
       if (!readonlyCheckbox.checked) {
-        db.add({msg:"ping"})
+        //db.add({msg:"ping"})
       } else {
         writerText.innerHTML = `Listening for updates to the database...`
       }
@@ -209,9 +214,9 @@ const main = (IPFS, ORBITDB) => {
       await db.add({msg:"ping"})
     } else if (db.type === 'feed') {
       const value = "GrEEtinGs from " + orbitdb.id + " " + creature + ": Hello #" + count + " (" + time + ")"
-      await db.add(value)
+	      await db.add(value)
     } else if (db.type === 'docstore') {
-      const value = { _id: 'peer1', avatar: creature, updated: time }
+	    const value = { _id: 'peer1', avatar: creature, updated: time }
       await db.put(value)
     } else if (db.type === 'keyvalue') {
       await db.set('mykey', creature)
@@ -224,7 +229,7 @@ const main = (IPFS, ORBITDB) => {
 
   const query = (db) => {
     if (db.type === 'eventlog')
-      return db.iterator({ limit: 5 }).collect().map(e => e.payload.value)
+      return db.iterator({limit:-1}).collect().map(e => e.payload.value)
     else if (db.type === 'feed')
       return db.iterator({ limit: 5 }).collect()
     else if (db.type === 'docstore')
@@ -261,13 +266,46 @@ const main = (IPFS, ORBITDB) => {
       <h2>Results</h2>
       <div id="results">
         <div>
-        ${result[0].msg
-        }
+        ${result.reverse().join('<br>\n')}
         </div>
       </div>
     `
   }
+  const submitText = async () => {
+     await db.add(textbox.value)
+  }
+  
 
+  
+  const lookupAccount = async () => {
+     console.log("creating Account with email "+ emailText)
+     
+     accountDB = await orbitdb.open(emailText, {
+        // If database doesn't exist, create it
+        create: true,
+        overwrite: true,
+        // Load only the local version of the database,
+        // don't load the latest from the network yet
+        localOnly: false,
+        type: 'docstore',
+        // If "Public" flag is set, allow anyone to write to the database,
+        // otherwise only the creator of the database can write
+        write: ['*'],
+      })
+
+      await load(accountDB, 'Creating database...')
+      const docs = accountDB.query((doc) => true)
+      if (docs.length === 0 ){
+        console.log("account doesn't exist")
+        return
+      }
+      console.log(docs[0].hash)
+      
+
+  }
+  createAccountButton.addEventListner('click', createAccount)
+  lookupAccountButton.addEventListener('click', lookupAccount)
+  submitButton.addEventListener('click', submitText)
   openButton.addEventListener('click', openDatabase)
   createButton.addEventListener('click', createDatabase)
 }
