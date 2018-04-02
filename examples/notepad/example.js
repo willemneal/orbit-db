@@ -17,21 +17,60 @@ const publicCheckbox = document.getElementById("public")
 const readonlyCheckbox = document.getElementById("readonly")
 const textbox = document.getElementById("textbox")
 const submitButton = document.getElementById("submit")
-const emailText = document.getElementById("email")
+const EmailText = document.getElementById("email")
 const createAccountButton = document.getElementById("createAccount")
-const lookUpAccountButton = document.getElementById("lookupAccount")
+const lookupAccountButton = document.getElementById("lookupAccount")
 
 function handleError(e) {
   console.error(e.stack)
   statusElm.innerHTML = e.message
 }
 
+const hash = async (str) =>  {
+  return crypto.subtle.digest({name: "SHA-512"}, asciiToUint8Array(str)).then(function (res){
+         return bytesToHexString(res);
+        })
+}
+
+const encryptText = async (plainText, password) => {
+  const ptUtf8 = new TextEncoder().encode(plainText);
+
+  const pwUtf8 = new TextEncoder().encode(password);
+  const pwHash = await crypto.subtle.digest('SHA-256', pwUtf8); 
+
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const alg = { name: 'AES-GCM', iv: iv };
+  const key = await crypto.subtle.importKey('raw', pwHash, alg, false, ['encrypt']);
+
+  return { iv, encBuffer: await crypto.subtle.encrypt(alg, key, ptUtf8) };
+}
+
+const decryptText = async (ctBuffer, iv, password) => {
+    const pwUtf8 = new TextEncoder().encode(password);
+    const pwHash = await crypto.subtle.digest('SHA-256', pwUtf8);
+
+    const alg = { name: 'AES-GCM', iv: iv };
+    const key = await crypto.subtle.importKey('raw', pwHash, alg, false, ['decrypt']);
+
+    const ptBuffer = await crypto.subtle.decrypt(alg, key, ctBuffer);
+
+    const plaintext = new TextDecoder().decode(ptBuffer);
+
+    return plaintext;
+}
+
+const encryptKeystore = async (db) => {
+  const toEncrypt = {keystore:db.keystore, id :db.id}
+
+}
+
 const main = (IPFS, ORBITDB) => {
-  let orbitdb, db
+  let orbitdb, db, accountDB
   let count = 0
   let interval = Math.floor((Math.random() * 6000) + (Math.random() * 2000))
   let updateInterval
   let dbType, dbAddress
+  let accountDBName
 
   // If we're building with Webpack, use the injected IPFS module.
   // Otherwise use 'Ipfs' which is exposed by ipfs.min.js
@@ -52,7 +91,6 @@ const main = (IPFS, ORBITDB) => {
   const ipfs = new Ipfs({
     repo: '/orbitdb/examples/browser/new/ipfs/0.27.3',
     start: true,
-    pass: "12345678909876543210",
     EXPERIMENTAL: {
       pubsub: true,
     },
@@ -75,7 +113,8 @@ const main = (IPFS, ORBITDB) => {
     createButton.disabled = false
     statusElm.innerHTML = "IPFS Started"
     console.log(ipfs._peerInfo.id._idB58String)
-    orbitdb = new OrbitDB(ipfs,false,{ peerId:"QmREdrKqBKsdFN8NkR9HCCRn6a9dGALfJ2oYmZw5XfYZN3"})
+    orbitdb = new OrbitDB(ipfs)
+    console.log("public " + orbitdb.key.getPublic('hex') + "\nprivate "+orbitdb.key.getPrivate('hex'))
   })
 
   const load = async (db, statusText) => {
@@ -274,13 +313,61 @@ const main = (IPFS, ORBITDB) => {
   const submitText = async () => {
      await db.add(textbox.value)
   }
+
+  const createAccountDB = async () => {
+        accountDBName = await hash("accountDB")
+       accountDB = await orbitdb.open(accountDBName, {
+         // If database doesn't exist, create it
+         create: true,
+         overwrite: true,
+         // Load only the local version of the database,
+         // don't load the latest from the network yet
+         localOnly: false,
+         type: 'keyvalue',
+         // If "Public" flag is set, allow anyone to write to the database,
+         // otherwise only the creator of the database can write
+         write: ['*'],
+        })
+        await accountDB.load()
+  }
   
-  const getKey = async () => {
+
+  
+  const lookupAccount = async () => {
+     var emailText = EmailText.value
+     console.log("looking up Account with email "+ emailText)
      
+     if (!accountDB){
+        await createAccountDB()
+      }
+      console.log(accountDB.address)
+      const docs = accountDB.get(await hash(emailText))
+      if (!docs){
+        console.log("account doesn't exist")
+        return
+      }
+      console.log(docs)
+      
 
   }
 
-  submiteEmail.addEventListener('click', 
+  const createAccount = async () => {
+     var emailText = EmailText.value
+     console.log("creating account for "+emailText)
+     if (!accountDB){
+       await createAccountDB() 
+     }
+      if (!accountDB.get(emailText)){
+        var hashedValue = await hash(emailText)
+        accountDB.put(hashedValue, emailText +" hashes to " + hashedValue)
+      }
+      console.log(accountDB.get(emailText))
+
+
+  }
+
+  createAccountButton.addEventListener('click', createAccount)
+  lookupAccountButton.addEventListener('click', lookupAccount)
   submitButton.addEventListener('click', submitText)
   openButton.addEventListener('click', openDatabase)
   createButton.addEventListener('click', createDatabase)
