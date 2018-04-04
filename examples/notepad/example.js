@@ -26,6 +26,11 @@ function handleError(e) {
   statusElm.innerHTML = e.message
 }
 
+function getDatabaseFromURL () {
+  var location = window.location.href.split("?")
+  return location.length > 1 ? location[1] : false;
+}
+
 const hash = async (str) =>  {
   return crypto.subtle.digest({name: "SHA-512"}, asciiToUint8Array(str)).then(function (res){
          return bytesToHexString(res);
@@ -64,6 +69,8 @@ const encryptKeystore = async (db) => {
 
 }
 
+
+
 const main = (IPFS, ORBITDB) => {
   let orbitdb, db, accountDB
   let count = 0
@@ -81,7 +88,19 @@ const main = (IPFS, ORBITDB) => {
   // Otherwise use 'OrbitDB' which is exposed by orbitdb.min.js
   if (ORBITDB)
     OrbitDB = ORBITDB
+  class Database {
+    constructor(ipfs, director, options = {}) {
+      this.db = OrbitDB(ipfs, director, options)
+    }
+    
+    async toHTML(store) {
+       const networkPeers = await ipfs.swarm.peers()
+       const databasePeers = await ipfs.pubsub.peers(db.address.toString())
+       return `<div id=db> ${store.dbAddress} <br> id: ${this.db.id} 
+              <br>  peers: <\div>`
+    }
 
+  }
   // Init UI
   openButton.disabled = true
   createButton.disabled = true
@@ -115,6 +134,8 @@ const main = (IPFS, ORBITDB) => {
     console.log(ipfs._peerInfo.id._idB58String)
     orbitdb = new OrbitDB(ipfs)
     console.log("public " + orbitdb.key.getPublic('hex') + "\nprivate "+orbitdb.key.getPrivate('hex'))
+    var urlDatabase = getDatabaseFromURL();
+    if (urlDatabase) dbAddressField.value = urlDatabase  
   })
 
   const load = async (db, statusText) => {

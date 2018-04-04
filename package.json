@@ -49,6 +49,7 @@
     "examples:browser": "open examples/browser/browser.html",
     "examples:replicate": "node examples/replication.js",
     "examples:pingserver": "node examples/pingserver.js",
+    "examples:backup" : "node examples/backup.js",
     "test": "TEST=all mocha",
     "build": "npm run build:es5 && npm run build:debug && npm run build:dist && npm run build:examples",
     "build:examples": "webpack --config conf/webpack.example.config.js --sort-modules-by size && mkdir -p examples/browser/lib && cp node_modules/ipfs/dist/index.js examples/browser/lib/ipfs.js",
