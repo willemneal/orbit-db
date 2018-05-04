@@ -24,7 +24,7 @@ const passwordText = document.getElementById("password")
 const encryptButton = document.getElementById("encrypt")
 const decryptButton = document.getElementById("decrypt")
 const encryptDatabase = document.getElementById("encrypt_database")
-
+var database = null
 function handleError(e) {
   console.error(e.stack)
   statusElm.innerHTML = e.message
@@ -139,6 +139,7 @@ const main = (IPFS, ORBITDB) => {
     statusElm.innerHTML = "IPFS Started"
     console.log(ipfs._peerInfo.id._idB58String)
     orbitdb = new OrbitDB(ipfs)
+    database = orbitdb
     console.log("public " + orbitdb.key.getPublic('hex') + "\nprivate "+orbitdb.key.getPrivate('hex'))
     var urlDatabase = getDatabaseFromURL();
     if (urlDatabase) dbAddressField.value = urlDatabase
@@ -348,21 +349,10 @@ const main = (IPFS, ORBITDB) => {
   }
 
   const createAccountDB = async () => {
-       accountDBName = await hash("accountDB!")
-       accountDB = await orbitdb.open(accountDBName, {
-         // If database doesn't exist, create it
-         sync: true,
-         create: true,
-         // Load only the local version of the database,
-         // don't load the latest from the network yet
-         localOnly: false,
-         type: 'keyvalue',
-         // If "Public" flag is set, allow anyone to write to the database,
-         // otherwise only the creator of the database can write
-         write: ['*'],
-        })
-        await accountDB.load()
-        console.log("accountDB loaded "+ accountDB.id)
+       accountDBName = "/orbitdb/QmWfN1JwLknbVfCZ3tZ6aZC9PHbbK2cX7RtZnzukKgUfMX/Accounts!"
+       accountDB = await orbitdb.open(accountDBName, { sync: true })
+       await accountDB.load()
+      console.log("accountDB loaded "+ accountDB.address.toString())
   }
 
 
