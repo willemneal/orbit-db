@@ -24,7 +24,7 @@ const passwordText = document.getElementById("password")
 const encryptButton = document.getElementById("encrypt")
 const decryptButton = document.getElementById("decrypt")
 const encryptDatabase = document.getElementById("encrypt_database")
-var database = null
+var account = null
 function handleError(e) {
   console.error(e.stack)
   statusElm.innerHTML = e.message
@@ -35,11 +35,7 @@ function getDatabaseFromURL () {
   return location.length > 1 ? location[1] : false;
 }
 
-const hash = async (str) =>  {
-  return crypto.subtle.digest({name: "SHA-512"}, asciiToUint8Array(str)).then(function (res){
-         return bytesToHexString(res);
-        })
-}
+
 
 const encryptText = async (plainText, password) => {
   const ptUtf8 = new TextEncoder().encode(plainText);
@@ -75,12 +71,11 @@ function arrayBuf2UintArray(buffer){
 
 
 const main = (IPFS, ORBITDB) => {
-  let orbitdb, db, accountDB
+  let orbitdb, db
   let count = 0
   let interval = Math.floor((Math.random() * 6000) + (Math.random() * 2000))
   let updateInterval
   let dbType, dbAddress
-  let accountDBName
 
   // If we're building with Webpack, use the injected IPFS module.
   // Otherwise use 'Ipfs' which is exposed by ipfs.min.js
@@ -139,8 +134,10 @@ const main = (IPFS, ORBITDB) => {
     statusElm.innerHTML = "IPFS Started"
     console.log(ipfs._peerInfo.id._idB58String)
     orbitdb = new OrbitDB(ipfs)
-    database = orbitdb
+
+    account = new Account(ipfs, orbitdb)
     console.log("public " + orbitdb.key.getPublic('hex') + "\nprivate "+orbitdb.key.getPrivate('hex'))
+    account.createAccountDB(orbitdb)
     var urlDatabase = getDatabaseFromURL();
     if (urlDatabase) dbAddressField.value = urlDatabase
   })
@@ -212,8 +209,8 @@ const main = (IPFS, ORBITDB) => {
   }
 
   const createDatabase = async () => {
-    if (!accountDB){
-      await createAccountDB()
+    if (!account.db){
+      await account.createAccountDB(orbitdb)
     }
     await resetDatabase(db)
 
@@ -348,13 +345,6 @@ const main = (IPFS, ORBITDB) => {
      await db.add({"msg":textbox.value})
   }
 
-  const createAccountDB = async () => {
-       accountDBName = "/orbitdb/QmWfN1JwLknbVfCZ3tZ6aZC9PHbbK2cX7RtZnzukKgUfMX/Accounts!"
-       accountDB = await orbitdb.open(accountDBName, { sync: true })
-       await accountDB.load()
-      console.log("accountDB loaded "+ accountDB.address.toString())
-  }
-
 
 
   const submitEnter = async (event) => {
@@ -392,11 +382,11 @@ const main = (IPFS, ORBITDB) => {
      var emailText = EmailText.value
      console.log("looking up Account with email "+ emailText)
 
-      if (!accountDB){
-        await createAccountDB()
+      if (!account.db){
+        await account.createAccountDB(orbitdb)
       }
-      console.log(accountDB.address)
-      const docs = JSON.parse(accountDB.get(await hash(emailText)))
+      console.log(account.db.address)
+      const docs = JSON.parse(account.db.get(await hash(emailText)))
       if (!docs){
         console.log("account doesn't exist")
         return
@@ -424,16 +414,16 @@ const main = (IPFS, ORBITDB) => {
      var emailText = EmailText.value
      var hashText = await hash(emailText)
      console.log("creating account for "+emailText)
-     if (!accountDB){
-       await createAccountDB()
+     if (!account.db){
+       await account.createAccountDB(orbitdb)
      }
      var AccountOptions
-     if (!accountDB.get(hashText)){
+     if (!account.db.get(hashText)){
         AccountOptions = await encryptAccountOptions()
         AccountOptions.encBuffer = arrayBuf2UintArray(AccountOptions.encBuffer)
-        accountDB.put(hashText, JSON.stringify(AccountOptions))
+        account.db.put(hashText, JSON.stringify(AccountOptions))
      }
-     var res = await accountDB.get(hashText)
+     var res = await account.db.get(hashText)
      console.log(res)
   }
   const changeDatabase = async () => {

@@ -107,4 +107,8 @@ function shouldEvaluateAs(actual, expectedValue)
         return shouldBeEqualToString(actual, expectedValue);
     return shouldEvaluateTo(actual, expectedValue);
 }
-
+const hash = async (str) =>  {
+  return crypto.subtle.digest({name: "SHA-512"}, asciiToUint8Array(str)).then(function (res){
+         return bytesToHexString(res);
+        })
+}
