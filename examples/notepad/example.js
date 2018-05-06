@@ -23,7 +23,6 @@ const lookupAccountButton = document.getElementById("lookupAccount")
 const passwordText = document.getElementById("password")
 const encryptButton = document.getElementById("encrypt")
 const decryptButton = document.getElementById("decrypt")
-const encryptDatabase = document.getElementById("encrypt_database")
 var account = null
 function handleError(e) {
   console.error(e.stack)
@@ -36,37 +35,6 @@ function getDatabaseFromURL () {
 }
 
 
-
-const encryptText = async (plainText, password) => {
-  const ptUtf8 = new TextEncoder().encode(plainText);
-
-  const pwUtf8 = new TextEncoder().encode(password);
-  const pwHash = await crypto.subtle.digest('SHA-256', pwUtf8);
-
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const alg = { name: 'AES-GCM', iv: iv };
-  const key = await crypto.subtle.importKey('raw', pwHash, alg, false, ['encrypt']);
-
-  return { iv, encBuffer: await crypto.subtle.encrypt(alg, key, ptUtf8) };
-}
-
-const decryptText = async (ctBuffer, iv, password) => {
-    const pwUtf8 = new TextEncoder().encode(password);
-    const pwHash = await crypto.subtle.digest('SHA-256', pwUtf8);
-
-    const alg = { name: 'AES-GCM', iv: iv };
-    const key = await crypto.subtle.importKey('raw', pwHash, alg, false, ['decrypt']);
-
-    const ptBuffer = await crypto.subtle.decrypt(alg, key, ctBuffer);
-
-    const plaintext = new TextDecoder().decode(ptBuffer);
-
-    return plaintext;
-}
-
-function arrayBuf2UintArray(buffer){
-  return new Uint8Array(buffer)
-}
 
 
 
@@ -133,9 +101,8 @@ const main = (IPFS, ORBITDB) => {
     createButton.disabled = false
     statusElm.innerHTML = "IPFS Started"
     console.log(ipfs._peerInfo.id._idB58String)
-    orbitdb = new OrbitDB(ipfs)
-
-    account = new Account(ipfs, orbitdb)
+    account = new Account(OrbitDB, ipfs)
+    orbitdb = account.orbitdb
     console.log("public " + orbitdb.key.getPublic('hex') + "\nprivate "+orbitdb.key.getPrivate('hex'))
     account.createAccountDB(orbitdb)
     var urlDatabase = getDatabaseFromURL();
@@ -370,14 +337,7 @@ const main = (IPFS, ORBITDB) => {
   }
   var orbitdb2
   var privDB
-  const encryptAccountOptions = async () => {
-    const toEncrypt = JSON.stringify({keystore:orbitdb.keystore._storage, peerId :orbitdb.id})
-    console.log(toEncrypt);
-    return await encryptText(toEncrypt,password.value)
-  }
-  const decryptAccountOptions = async (cipherText, password) => {
-    return JSON.parse(await decryptText(cipherText.encBuffer, cipherText.iv,password))
-  }
+
   const lookupAccount = async () => {
      var emailText = EmailText.value
      console.log("looking up Account with email "+ emailText)
@@ -392,6 +352,7 @@ const main = (IPFS, ORBITDB) => {
         return
       }
       var ivArray = []
+      var key
       for (key in docs.iv){
         ivArray[key] = docs.iv[key]
       }
@@ -414,34 +375,39 @@ const main = (IPFS, ORBITDB) => {
      var emailText = EmailText.value
      var hashText = await hash(emailText)
      console.log("creating account for "+emailText)
-     if (!account.db){
-       await account.createAccountDB(orbitdb)
-     }
      var AccountOptions
-     if (!account.db.get(hashText)){
-        AccountOptions = await encryptAccountOptions()
+     var lookup = await account.db.get(hashText)
+     if (!lookup){
+        AccountOptions = await account.encryptAccountOptions(password.value)
         AccountOptions.encBuffer = arrayBuf2UintArray(AccountOptions.encBuffer)
-        account.db.put(hashText, JSON.stringify(AccountOptions))
+        await account.db.put(hashText, JSON.stringify(AccountOptions))
      }
      var res = await account.db.get(hashText)
      console.log(res)
   }
   const changeDatabase = async () => {
     var oldId = orbitdb.id
-    var options = await lookupAccount()
+    var options = await account.lookupAccount(EmailText.value, password.value)
+    if (!options){
+      return
+    }
+    // orbitdb = account.login(options)
     orbitdb.id = options["peerId"]
     orbitdb.keystore._storage[orbitdb.id] = options["keystore"][orbitdb.id]
     orbitdb = new OrbitDB(orbitdb._ipfs,orbitdb.directory, {peerId: orbitdb.id, keystore:orbitdb.keystore})
+    account.orbitdb = orbitdb
     console.log("old id "+ oldId + " new id: " + options.peerId)
 
   }
 
-  encryptDatabase.addEventListener("click", encryptAccountOptions)
   encryptButton.addEventListener("click", encryptAndSubmit)
   decryptButton.addEventListener("click", decryptAndSubmit)
   textbox.addEventListener("keyup", submitEnter)
-  createAccountButton.addEventListener('click', createAccount)
-  lookupAccountButton.addEventListener('click', changeDatabase)
+  createAccountButton.addEventListener('click', function() {
+                       account.createAccount(EmailText.value,password.value)})
+  lookupAccountButton.addEventListener('click', function(){
+                       account.login(EmailText.value, password.value)
+  })
   submitButton.addEventListener('click', submitText)
   openButton.addEventListener('click', openDatabase)
   createButton.addEventListener('click', createDatabase)
